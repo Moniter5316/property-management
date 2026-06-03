@@ -1,0 +1,102 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Property {
+  id                String   @id @default(uuid())
+  name              String
+  type              String   // "BUILDING" | "HOUSE"
+  address           String?
+  lightPricePerUnit Float    @default(9)
+  waterPricePerUnit Float    @default(100)
+  commonFee         Float    @default(100)
+  rooms             Room[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Room {
+  id         String   @id @default(uuid())
+  roomNumber String
+  floor      Int
+  baseRent   Float
+  status     String   // "VACANT" | "OCCUPIED" | "CLEARANCE"
+  occupantCount Int      @default(1)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenants    Tenant[]
+  bills      Bill[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([propertyId, roomNumber])
+}
+
+model Tenant {
+  id            String    @id @default(uuid())
+  name          String
+  phone         String
+  startDate     DateTime
+  endDate       DateTime?
+  depositAmount Float     @default(0)
+  roomId        String
+  room          Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Bill {
+  id                  String   @id @default(uuid())
+  month               Int      // 1-12
+  year                Int      // e.g. 2026
+  status              String   // "PAID" | "UNPAID" | "PENDING" | "PARTIAL" | "REFUND_PENDING" | "REFUNDED" | "CLEARED"
+  paidAmount          Float    @default(0)
+  previousLightMeter  Float
+  currentLightMeter   Float
+  lightPricePerUnit   Float
+  totalLightPrice     Float
+  previousWaterMeter  Float
+  currentWaterMeter   Float
+  waterPricePerUnit   Float
+  totalWaterPrice     Float
+  baseRentCharged     Float    // Room baseRent at the time
+  proratedRentCharged Float    // Prorated baseRent depending on occupied days
+  commonFeeCharged    Float    @default(100)
+  depositCharged      Float    @default(0)
+  discount            Float    @default(0)
+  otherCharged        Float    @default(0)
+  occupantCount       Int      @default(1)
+  remark              String?
+  totalAmount         Float    // Sum of prorated + light + water + common + deposit - discount
+  paymentSlipUrl      String?
+  roomId              String
+  room                Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  paymentTransactions PaymentTransaction[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([roomId, month, year])
+}
+
+model PaymentTransaction {
+  id             String   @id @default(uuid())
+  slipId         String?  // SlipOK transaction id
+  transRef       String?  // Bank reference number
+  amount         Float
+  senderName     String?
+  transDate      String?  // Date from slip
+  transTime      String?  // Time from slip
+  status         String   // "UNMATCHED" | "MATCHED"
+  slipImageUrl   String?
+  billId         String?
+  bill           Bill?    @relation(fields: [billId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
