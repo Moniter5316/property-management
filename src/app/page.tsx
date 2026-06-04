@@ -210,6 +210,7 @@ export default function Dashboard() {
   
   // View states
   const [isPrintMode, setIsPrintMode] = useState(false);
+  const [isPrintSummaryMode, setIsPrintSummaryMode] = useState(false);
   const [isWalkingMeterMode, setIsWalkingMeterMode] = useState(false);
 
   // Modals state
@@ -1171,6 +1172,144 @@ export default function Dashboard() {
     });
   };
 
+  // Summary Board Print View Render
+  if (isPrintSummaryMode) {
+    const activeProperty = properties.find(p => p.id === activePropertyId) || properties[0];
+    const propertyName = activeProperty ? activeProperty.name : 'ทั้งหมด';
+    
+    // Sort rooms by roomNumber
+    const sortedRooms = [...filteredRooms].sort((a, b) => a.roomNumber.localeCompare(b.roomNumber));
+    
+    // Calculate dates (28th to 3rd)
+    const shortYear = (selectedYear + 543).toString().slice(-2);
+    const payStartDate = `28/${selectedMonth}/${shortYear}`;
+    const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
+    const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
+    const nextShortYear = (nextYear + 543).toString().slice(-2);
+    const payEndDate = `3/${nextMonth}/${nextShortYear}`;
+
+    return (
+      <div className="min-h-screen bg-slate-200 text-black font-sans">
+        {/* Screen-only controls */}
+        <div className="print:hidden p-4 bg-slate-900 flex justify-between items-center sticky top-0 z-50 shadow-xl border-b border-slate-800">
+          <div className="text-white font-semibold flex items-center gap-2">
+            <FileText className="h-5 w-5 text-emerald-400" />
+            หน้าจอตัวอย่างก่อนพิมพ์ (ใบแจ้งยอดรวมบอร์ด A4)
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setIsPrintSummaryMode(false)}
+              className="p-2 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white flex items-center gap-1 transition"
+            >
+              <XCircle className="h-5 w-5" />
+              <span>ปิด</span>
+            </button>
+            <button 
+              onClick={() => window.print()}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-semibold transition"
+            >
+              <Printer className="h-4 w-4" />
+              พิมพ์ใบติดบอร์ด (Ctrl + P)
+            </button>
+          </div>
+        </div>
+
+        {/* Print Pages Layout */}
+        <style dangerouslySetInnerHTML={{__html: `
+          @media print {
+            body { background: white; margin: 0; padding: 0; }
+            @page { size: A4 portrait; margin: 10mm; }
+            .print-page { box-shadow: none !important; border: none !important; margin: 0 !important; width: 100% !important; height: auto !important; }
+          }
+        `}} />
+
+        <div className="p-4 md:p-8 max-w-4xl mx-auto flex flex-col gap-8 items-center">
+          <div className="print-page w-[210mm] min-h-[297mm] p-6 border border-slate-300 rounded-lg shadow-md bg-white text-sm relative overflow-hidden">
+            
+            <h1 className="text-center font-bold text-xl mb-6 underline underline-offset-4">
+              ใบแจ้งยอดค่าเช่า {propertyName} เดือน {MONTHS[selectedMonth - 1]} {shortYear}
+            </h1>
+            
+            <div className="flex gap-6">
+              {/* Left Column: Table */}
+              <div className="w-[120px] shrink-0 border-t border-l border-black">
+                <div className="flex bg-slate-100 font-bold border-b border-black text-center text-[10px]">
+                  <div className="w-1/2 border-r border-black py-1">ห้อง</div>
+                  <div className="w-1/2 py-1">ค่าห้อง</div>
+                </div>
+                {sortedRooms.map(room => {
+                  const bill = bills.find(b => b.roomId === room.id);
+                  const amount = bill ? bill.totalAmount : 0;
+                  const isZero = amount === 0;
+                  
+                  return (
+                    <div key={room.id} className={`flex border-b border-black text-center text-[10px] ${isZero ? 'bg-yellow-200 font-bold' : ''}`}>
+                      <div className="w-1/2 border-r border-black py-0.5">{room.roomNumber}</div>
+                      <div className="w-1/2 py-0.5">{isZero ? '-' : amount.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Right Column: Info */}
+              <div className="flex-1 flex flex-col pt-2">
+                <div className="text-center font-black text-4xl mb-3 leading-snug tracking-tight text-slate-900 drop-shadow-sm">
+                  โปรดชำระค่าห้องภายใน<br/>ไม่เกินวันที่ 1 - 3 ของเดือน
+                </div>
+                
+                <div className="text-center text-xl font-bold mb-6 flex justify-center items-center gap-2">
+                  <span className="text-rose-600">( {payStartDate} ถึง {payEndDate} )</span>
+                  <span className="text-rose-600 underline decoration-rose-400 decoration-2">(เกินมีค่าปรับ)</span>
+                </div>
+
+                {/* PromptPay Box */}
+                <div className="border-[6px] border-blue-600 rounded-lg p-4 mb-4 flex gap-4 bg-white relative shadow-sm">
+                  <div className="w-[180px] h-[180px] bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 font-bold text-center p-4">
+                    [รอใส่ภาพ<br/>QR พร้อมเพย์]
+                  </div>
+                  <div className="flex-1 flex flex-col justify-center">
+                    <div className="flex items-center gap-2 mb-2 justify-end pr-2">
+                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-xs">K</div>
+                      <span className="font-bold text-lg text-slate-600">ธนาคารกสิกรไทย</span>
+                    </div>
+                    <div className="border border-black text-center py-2 text-2xl font-black tracking-widest mb-4 shadow-sm bg-slate-50">
+                      994-2084-541
+                    </div>
+                    <div className="text-xl font-bold mb-1">วิรัลพัชร สร้อย.</div>
+                    <div className="text-lg font-semibold text-slate-600">(Wiralpat. Soysa.)</div>
+                  </div>
+                </div>
+
+                {/* LINE Box */}
+                <div className="border-[6px] border-[#5a803e] rounded-lg p-4 flex items-center gap-6 bg-white shadow-sm">
+                  <div className="w-[160px] h-[160px] bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 font-bold text-center p-4">
+                    [รอใส่ภาพ<br/>QR LINE]
+                  </div>
+                  <div className="border border-slate-300 p-4 bg-white text-center flex-1 shadow-sm rounded-sm">
+                    <div className="text-2xl font-bold mb-3">- เพิ่มเพื่อน</div>
+                    <div className="text-2xl font-bold mb-3">- ส่งสลิป</div>
+                    <div className="text-2xl font-bold">- บิลใบเสร็จ</div>
+                  </div>
+                </div>
+                
+                <div className="mt-8 text-3xl font-bold text-center text-slate-800">
+                  โปรดเก็บใบเสร็จ/หลักฐานการโอนเงิน
+                </div>
+                
+                {/* Burmese text placeholder */}
+                <div className="mt-4 bg-slate-50 border border-slate-200 p-4 rounded text-center text-xl text-slate-700 font-medium">
+                  ကျေးဇူးပြု၍ ငွေပေးချေမှုအားလုံးအတွက် ပြေစာများကို သိမ်းဆည်းထားပါ။
+                </div>
+
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Batch Print View Render
   if (isPrintMode) {
     // Only unpaid/pending bills or print all bills for the selected month
@@ -1540,7 +1679,7 @@ export default function Dashboard() {
   }
 
   // Render Landing Auth & Lookup Portal if not logged in and not printing
-  if (!isLoggedIn && !isPrintMode) {
+  if (!isLoggedIn && !isPrintMode && !isPrintSummaryMode) {
     return (
       <div className="min-h-screen w-full bg-[#070913] text-slate-100 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans">
         {/* Decorative glowing gradient spheres */}
@@ -1799,6 +1938,14 @@ export default function Dashboard() {
             >
               <Printer className="h-4 w-4" />
               <span>พิมพ์บิลชุดเล็ก (A6)</span>
+            </button>
+
+            <button 
+              onClick={() => setIsPrintSummaryMode(true)}
+              className="flex items-center gap-1.5 bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/20 px-4 py-2.5 rounded-xl text-sm font-semibold transition hidden md:flex"
+            >
+              <FileText className="h-4 w-4" />
+              <span>พิมพ์ใบติดบอร์ด (A4)</span>
             </button>
 
             <div className="w-px h-6 bg-slate-800 hidden sm:block mx-1"></div>
