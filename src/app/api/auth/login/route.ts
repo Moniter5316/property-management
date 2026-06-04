@@ -62,15 +62,7 @@ export async function POST(request: Request) {
       rateLimitMap.delete(ip); // Clear rate limit on successful login
       
       const response = NextResponse.json({ success: true, user: { role: 'admin', username } });
-      response.cookies.set('admin_session', 'authenticated', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24, // 24 hours
-        path: '/',
-      });
-      // Set JWT cookie as well for new auth
-      response.cookies.set('admin_token', token, {
+      response.cookies.set('admin_session', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
