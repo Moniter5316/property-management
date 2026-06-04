@@ -1255,6 +1255,11 @@ export default function Dashboard() {
                         {fullDate} {subText}
                       </div>
                       <div>
+                        {properties.find(p => p.id === room.propertyId)?.name && (
+                          <span className="mr-2 text-slate-600">
+                            {properties.find(p => p.id === room.propertyId)?.name}
+                          </span>
+                        )}
                         ห้อง {room.roomNumber}
                       </div>
                     </div>
