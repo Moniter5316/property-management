@@ -305,9 +305,9 @@ export default function Dashboard() {
   }, []);
 
   // Fetch all initial data
-  const fetchData = async () => {
+  const fetchData = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       
       // Fetch properties
       const propRes = await fetch('/api/properties');
@@ -341,12 +341,19 @@ export default function Dashboard() {
     } catch (e) {
       console.error('Error loading dashboard data', e);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+
+    // Auto refresh every 1 minute (60000ms) without showing loading spinner
+    const interval = setInterval(() => {
+      fetchData(false);
+    }, 60000);
+
+    return () => clearInterval(interval);
   }, [selectedMonth, selectedYear]);
 
   // Compute stats based on current filters/month
