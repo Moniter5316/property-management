@@ -32,6 +32,7 @@ export interface Tenant {
   startDate: Date;
   endDate: Date | null;
   roomId: string;
+  depositAmount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,6 +62,7 @@ export interface Bill {
   totalAmount: number;
   paymentSlipUrl: string | null;
   roomId: string;
+  tenantId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   room?: Room;
@@ -159,7 +161,19 @@ export function initializeMockData() {
     updatedAt: new Date('2025-01-01'),
   };
 
-  properties = [propA, propB, propHouse];
+  const prop238: Property = {
+    id: 'prop-building-238',
+    name: 'ตึก 238 (Building 238)',
+    type: 'BUILDING',
+    address: '238 ถนนพระราม 9 กรุงเทพฯ 10310',
+    lightPricePerUnit: 9,
+    waterPricePerUnit: 100,
+    commonFee: 100,
+    createdAt: new Date('2025-01-01'),
+    updatedAt: new Date('2025-01-01'),
+  };
+
+  properties = [propA, propB, propHouse, prop238];
 
   // 2. Create Rooms for Building A (5 floors, 12 rooms per floor = 60 rooms)
   for (let floor = 1; floor <= 5; floor++) {
@@ -206,17 +220,48 @@ export function initializeMockData() {
   // 4. Create single room for Cozy House
   rooms.push({
     id: 'room-house-1',
-    roomNumber: 'บ้านเลขที่ 88',
+    roomNumber: 'House-1',
     floor: 1,
-    baseRent: 12000,
+    baseRent: 15000,
     status: 'OCCUPIED',
-    occupantCount: 1,
+    occupantCount: 3,
     propertyId: propHouse.id,
     createdAt: new Date('2025-01-01'),
     updatedAt: new Date('2025-01-01'),
   });
 
-  // 5. Populate Tenants and Bills
+  // 5. Create Rooms for Building 238 (Floor 2: 212-224, Floor 3: 325-336)
+  // Floor 2
+  for (let r = 12; r <= 24; r++) {
+    rooms.push({
+      id: `room-238-2-${r}`,
+      roomNumber: `2${r}`,
+      floor: 2,
+      baseRent: 4500,
+      status: r % 3 === 0 ? 'VACANT' : 'OCCUPIED',
+      occupantCount: 1,
+      propertyId: prop238.id,
+      createdAt: new Date('2025-01-01'),
+      updatedAt: new Date('2025-01-01'),
+    });
+  }
+
+  // Floor 3
+  for (let r = 25; r <= 36; r++) {
+    rooms.push({
+      id: `room-238-3-${r}`,
+      roomNumber: `3${r}`,
+      floor: 3,
+      baseRent: 5000,
+      status: r % 4 === 0 ? 'VACANT' : 'OCCUPIED',
+      occupantCount: 1,
+      propertyId: prop238.id,
+      createdAt: new Date('2025-01-01'),
+      updatedAt: new Date('2025-01-01'),
+    });
+  }
+
+  // 6. Generate Tenants for Occupied Rooms
   // Let's seed tenants for occupied rooms and some bills for May 2026 (all paid) and June 2026 (some paid, some unpaid, some pending)
   const tenantNames = [
     'สมชาย ใจดี', 'สมศรี รักเรียน', 'วิชัย รุ่งเรือง', 'นภา สว่างไสว', 'กิตติศักดิ์ มีสุข',
@@ -238,6 +283,7 @@ export function initializeMockData() {
         startDate: new Date('2025-06-01'),
         endDate: null,
         roomId: room.id,
+        depositAmount: room.baseRent, // Usually deposit is equal to 1 month rent
         createdAt: new Date('2025-06-01'),
         updatedAt: new Date('2025-06-01'),
       };
@@ -256,12 +302,24 @@ export function initializeMockData() {
       const commonFeeChargedMay = 100;
       const totalAmountMay = room.baseRent + lightPrice + waterPrice + commonFeeChargedMay;
 
+      // Modify May 2026 bill status for testing
+      let statusMay: 'PAID' | 'UNPAID' | 'PARTIAL' = 'PAID';
+      let paidAmountMay = totalAmountMay;
+      let slipUrlMay: string | null = 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?q=80&w=300';
+
+      // First 10 rooms have unpaid May bills
+      if (index < 10) {
+        statusMay = 'UNPAID';
+        paidAmountMay = 0;
+        slipUrlMay = null;
+      }
+
       bills.push({
         id: `bill-may-${room.id}`,
         month: 5,
         year: 2026,
-        status: 'PAID',
-        paidAmount: totalAmountMay,
+        status: statusMay,
+        paidAmount: paidAmountMay,
         previousLightMeter: prevLightMay,
         currentLightMeter: currLightMay,
         lightPricePerUnit: 9,
@@ -279,11 +337,29 @@ export function initializeMockData() {
         occupantCount: 1,
         remark: null,
         totalAmount: totalAmountMay,
-        paymentSlipUrl: 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?q=80&w=300',
+        paymentSlipUrl: slipUrlMay,
         roomId: room.id,
         createdAt: new Date('2026-05-31'),
         updatedAt: new Date('2026-05-31'),
       });
+
+      // For the first room only, simulate someone transferred the slip but the amount is wrong
+      if (index === 0) {
+        paymentTransactions.push({
+          id: `pt-wrong-${room.id}`,
+          slipId: `wrong-slip-${room.id}`,
+          transRef: `REF${Math.floor(Math.random() * 1000000)}`,
+          amount: totalAmountMay - 500, // Transferred 500 THB less than required
+          senderName: tenant.name,
+          transDate: '2026-06-02',
+          transTime: '10:30',
+          status: 'UNMATCHED', // Admin will see this and try to match it
+          slipImageUrl: 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?q=80&w=300',
+          billId: null, // Not matched yet
+          createdAt: new Date('2026-06-02T10:30:00Z'),
+          updatedAt: new Date('2026-06-02T10:30:00Z'),
+        });
+      }
 
       // Create June 2026 bill (PAID, UNPAID, or PENDING)
       let prevLightJune = currLightMay;

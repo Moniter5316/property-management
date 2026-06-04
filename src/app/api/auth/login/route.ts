@@ -1,9 +1,29 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { SignJWT } from 'jose';
+
+// Rate Limiter for login
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 export async function POST(request: Request) {
   try {
+    const headerStore = await headers();
+    const ip = headerStore.get('x-forwarded-for') || '127.0.0.1';
+    
+    // Check rate limit
+    const now = Date.now();
+    const rateLimitData = rateLimitMap.get(ip);
+    if (rateLimitData && now < rateLimitData.resetAt) {
+      if (rateLimitData.count >= 5) {
+        return NextResponse.json(
+          { error: 'Too many login attempts. Please try again in 15 minutes.' },
+          { status: 429 }
+        );
+      }
+    } else if (rateLimitData && now >= rateLimitData.resetAt) {
+      rateLimitMap.delete(ip); // reset after 15 mins
+    }
+
     const body = await request.json();
     const { username, password } = body;
 
@@ -39,20 +59,33 @@ export async function POST(request: Request) {
         .setExpirationTime('24h') // 24 hour expiration for JWT validity
         .sign(secretKey);
 
-      const response = NextResponse.json({ success: true, message: 'เข้าสู่ระบบสำเร็จ' });
-      const cookieStore = await cookies();
+      rateLimitMap.delete(ip); // Clear rate limit on successful login
       
-      // Still using a session cookie (no maxAge) so it clears on browser close
-      cookieStore.set('admin_session', token, {
+      const response = NextResponse.json({ success: true, user: { role: 'admin', username } });
+      response.cookies.set('admin_session', 'authenticated', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        path: '/'
+        maxAge: 60 * 60 * 24, // 24 hours
+        path: '/',
       });
+      // Set JWT cookie as well for new auth
+      response.cookies.set('admin_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24, // 24 hours
+        path: '/',
+      });
+      
       return response;
     } else {
+      // Record failed attempt
+      const currentRateLimit = rateLimitMap.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+      rateLimitMap.set(ip, { count: currentRateLimit.count + 1, resetAt: currentRateLimit.resetAt });
+
       return NextResponse.json(
-        { error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' },
+        { error: 'Invalid username or password' },
         { status: 401 }
       );
     }

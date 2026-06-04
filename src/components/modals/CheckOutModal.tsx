@@ -13,9 +13,12 @@ export default function CheckOutModal({ room, onClose, onSuccess }: CheckOutModa
   
   const [checkOutDate, setCheckOutDate] = useState(new Date().toISOString().split('T')[0]);
   const [checkOutLight, setCheckOutLight] = useState('');
-  const [checkOutWater, setCheckOutWater] = useState('');
   const [damageFee, setDamageFee] = useState('');
   const [isForfeitDeposit, setIsForfeitDeposit] = useState(false);
+
+  // หาเลขมิเตอร์ไฟเก่าสุดจากบิลล่าสุด ถ้ามี
+  const previousLight = room.bills && room.bills.length > 0 ? (room.bills[0].currentLightMeter || room.bills[0].previousLightMeter) : '-';
+  const previousWater = room.bills && room.bills.length > 0 ? (room.bills[0].currentWaterMeter || room.bills[0].previousWaterMeter) : 0;
 
   const handleCheckOut = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +33,7 @@ export default function CheckOutModal({ room, onClose, onSuccess }: CheckOutModa
           roomId: room.id,
           endDate: checkOutDate,
           finalLightMeter: Number(checkOutLight),
-          finalWaterMeter: Number(checkOutWater),
+          finalWaterMeter: previousWater, // ส่งเลขน้ำเก่าไปเลย เพราะเราคิดราคาเหมา
           damageFee: damageFee ? Number(damageFee) : 0,
           isForfeitDeposit,
         }),
@@ -101,29 +104,20 @@ export default function CheckOutModal({ room, onClose, onSuccess }: CheckOutModa
             <span className="text-xs font-semibold text-rose-400">ริบเงินประกัน (กรณีทำผิดสัญญา)</span>
           </label>
 
-          <div className="grid grid-cols-2 gap-3 bg-[#12162a]/40 p-3 rounded-xl border border-slate-800/80">
-            <div className="col-span-2">
+          <div className="bg-[#12162a]/40 p-3 rounded-xl border border-slate-800/80">
+            <div className="mb-2">
               <p className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">บันทึกเลขมิเตอร์ปลายทาง</p>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">เลขมิเตอร์ไฟคืนห้อง</label>
+              <label className="block text-xs text-slate-400 mb-1">
+                เลขมิเตอร์ไฟคืนห้อง <span className="text-indigo-400 font-semibold">(เลขเดิม: {previousLight})</span>
+              </label>
               <input 
                 type="number"
                 required
                 placeholder="ป้อนเลขไฟ"
                 value={checkOutLight}
                 onChange={(e) => setCheckOutLight(e.target.value)}
-                className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-lg py-2 px-2.5 text-xs text-white focus:outline-none transition"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">เลขมิเตอร์น้ำคืนห้อง</label>
-              <input 
-                type="number"
-                required
-                placeholder="ป้อนเลขน้ำ"
-                value={checkOutWater}
-                onChange={(e) => setCheckOutWater(e.target.value)}
                 className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-lg py-2 px-2.5 text-xs text-white focus:outline-none transition"
               />
             </div>

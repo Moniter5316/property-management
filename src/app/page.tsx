@@ -62,6 +62,7 @@ interface Bill {
   month: number;
   year: number;
   status: 'PAID' | 'UNPAID' | 'PENDING' | 'PARTIAL' | 'REFUND_PENDING' | 'REFUNDED' | 'CLEARED';
+  paidAmount: number;
   previousLightMeter: number;
   currentLightMeter: number;
   lightPricePerUnit: number;
@@ -81,6 +82,7 @@ interface Bill {
   totalAmount: number;
   paymentSlipUrl: string | null;
   roomId: string;
+  tenantId?: string | null;
   room?: Room;
   createdAt: string | Date;
 }
@@ -265,7 +267,7 @@ export default function Dashboard() {
   const [meterRemark, setMeterRemark] = useState('');
 
   // 9. Walking meter form state (for walking around and inputting multiple rooms)
-  const [walkingMeters, setWalkingMeters] = useState<Record<string, { light: string; water: string }>>({});
+  const [walkingMeters, setWalkingMeters] = useState<Record<string, { light: string }>>({});
 
   // 10. Edit Room & Rates Form States
   const [editRoomRent, setEditRoomRent] = useState('');
@@ -381,14 +383,13 @@ export default function Dashboard() {
   // Initialize walking meter states
   useEffect(() => {
     if (isWalkingMeterMode) {
-      const initMeters: Record<string, { light: string; water: string }> = {};
+      const initMeters: Record<string, { light: string }> = {};
       rooms
-        .filter(r => r.status === 'OCCUPIED' && (activePropertyId === 'all' || r.propertyId === activePropertyId))
+        .filter(r => (activePropertyId === 'all' || r.propertyId === activePropertyId))
         .forEach(r => {
           const activeBill = bills.find(b => b.roomId === r.id);
           initMeters[r.id] = {
             light: activeBill ? (activeBill.currentLightMeter || activeBill.previousLightMeter).toString() : '',
-            water: activeBill ? (activeBill.currentWaterMeter || activeBill.previousWaterMeter).toString() : '',
           };
         });
       setWalkingMeters(initMeters);
@@ -687,11 +688,11 @@ export default function Dashboard() {
     try {
       let savedCount = 0;
       for (const roomId in walkingMeters) {
-        const { light, water } = walkingMeters[roomId];
+        const { light } = walkingMeters[roomId];
         const room = rooms.find(r => r.id === roomId);
         const activeBill = bills.find(b => b.roomId === roomId);
         
-        if (!room || !activeBill || !light || !water) continue;
+        if (!room || !activeBill || !light) continue;
         
         // Use the property's configured rate (fallback to safe defaults)
         const lightRate = room.property?.lightPricePerUnit ?? 9;
@@ -709,7 +710,7 @@ export default function Dashboard() {
             currentLightMeter: Number(light),
             lightPricePerUnit: lightRate,
             previousWaterMeter: activeBill.previousWaterMeter,
-            currentWaterMeter: Number(water),
+            currentWaterMeter: activeBill.previousWaterMeter, // ส่งเลขเดิมไปเพราะเหมาค่าน้ำ
             waterPricePerUnit: waterRate,
             status: 'UNPAID', // Mark as awaiting payment
           }),
@@ -1065,7 +1066,7 @@ export default function Dashboard() {
     const sortedFloors = Object.keys(floorsMap)
       .map(Number)
       .filter(num => !isNaN(num))
-      .sort((a, b) => b - a); // Highest floor first
+      .sort((a, b) => a - b); // Lowest floor first
 
     if (sortedFloors.length === 0) {
       return (
@@ -1442,7 +1443,7 @@ export default function Dashboard() {
   // Mobile Walking Meter Input View
   if (isWalkingMeterMode) {
     const walkingRooms = rooms.filter(
-      r => r.status === 'OCCUPIED' && (activePropertyId === 'all' || r.propertyId === activePropertyId)
+      r => (activePropertyId === 'all' || r.propertyId === activePropertyId)
     );
 
     return (
@@ -1480,7 +1481,7 @@ export default function Dashboard() {
                     <span className="text-xs text-slate-400 truncate max-w-[120px]">{room.tenants?.[0]?.name}</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     {/* Electricity Input */}
                     <div>
                       <label className="block text-xs font-semibold text-yellow-400 mb-1.5 flex items-center gap-1">
@@ -1495,26 +1496,6 @@ export default function Dashboard() {
                           [room.id]: {
                             ...walkingMeters[room.id],
                             light: e.target.value
-                          }
-                        })}
-                        className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-lg py-2 px-3 text-sm focus:outline-none text-white transition"
-                      />
-                    </div>
-
-                    {/* Water Input */}
-                    <div>
-                      <label className="block text-xs font-semibold text-blue-400 mb-1.5 flex items-center gap-1">
-                        <Droplet className="h-3 w-3" /> มิเตอร์น้ำ (เดิม: {prevWater})
-                      </label>
-                      <input 
-                        type="number"
-                        placeholder="เลขน้ำใหม่"
-                        value={walkingMeters[room.id]?.water || ''}
-                        onChange={(e) => setWalkingMeters({
-                          ...walkingMeters,
-                          [room.id]: {
-                            ...walkingMeters[room.id],
-                            water: e.target.value
                           }
                         })}
                         className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-lg py-2 px-3 text-sm focus:outline-none text-white transition"
@@ -2074,6 +2055,9 @@ export default function Dashboard() {
                     <p className="text-xs text-slate-400">
                       ย้ายเข้า: {new Date(selectedRoom.tenants[0].startDate).toLocaleDateString('th-TH')}
                     </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      <span className="text-indigo-400 font-semibold">เงินประกันห้อง:</span> ฿{(selectedRoom.tenants[0].depositAmount || 0).toLocaleString()}
+                    </p>
                   </div>
                 ) : (
                   <div className="text-sm text-slate-500 italic">
@@ -2148,10 +2132,18 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      <div className="flex justify-between items-center pt-3 border-t border-slate-800 text-xs">
+                      <div className="flex justify-between items-start pt-3 border-t border-slate-800 text-xs">
                         <div>
                           <p className="text-[10px] text-slate-400">ยอดรวมทั้งสิ้น</p>
                           <p className="text-base font-black text-white">฿{bill.totalAmount.toLocaleString()}</p>
+                          {bill.paidAmount < bill.totalAmount && (
+                            <div className="mt-1">
+                              {bill.paidAmount > 0 && (
+                                <p className="text-[10px] text-emerald-400/80">ชำระมาแล้ว: ฿{bill.paidAmount.toLocaleString()}</p>
+                              )}
+                              <p className="text-[11px] font-bold text-rose-400 mt-0.5">ยอดค้างชำระ: ฿{(bill.totalAmount - bill.paidAmount).toLocaleString()}</p>
+                            </div>
+                          )}
                         </div>
                         <div className="text-right">
                           <span className={`inline-block px-2.5 py-0.5 text-[10px] rounded font-bold border ${

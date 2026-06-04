@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isUsingMock } from '@/lib/dbService';
+import { verifyAdmin } from '@/lib/auth';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!(await verifyAdmin())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
 
     if (await isUsingMock()) {

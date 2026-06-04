@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { verifyAdmin } from '@/lib/auth';
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get('admin_session')?.value;
-    const isLoggedIn = session === 'authenticated';
+    const isLoggedIn = await verifyAdmin();
     return NextResponse.json({ isLoggedIn });
   } catch (error: any) {
     console.error('Error checking session:', error);

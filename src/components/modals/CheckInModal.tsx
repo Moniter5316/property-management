@@ -15,7 +15,6 @@ export default function CheckInModal({ room, onClose, onSuccess }: CheckInModalP
   const [checkInPhone, setCheckInPhone] = useState('');
   const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
   const [checkInLight, setCheckInLight] = useState('');
-  const [checkInWater, setCheckInWater] = useState('');
   const [checkInOccupants, setCheckInOccupants] = useState('1');
   const [depositAmount, setDepositAmount] = useState('');
 
@@ -34,7 +33,7 @@ export default function CheckInModal({ room, onClose, onSuccess }: CheckInModalP
           tenantPhone: checkInPhone,
           startDate: checkInDate,
           initialLightMeter: Number(checkInLight),
-          initialWaterMeter: Number(checkInWater),
+          initialWaterMeter: 0,
           occupantCount: Number(checkInOccupants),
           depositAmount: depositAmount ? Number(depositAmount) : 0,
         }),
@@ -133,8 +132,8 @@ export default function CheckInModal({ room, onClose, onSuccess }: CheckInModalP
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 bg-[#12162a]/40 p-3 rounded-xl border border-slate-800/80">
-            <div className="col-span-2">
+          <div className="bg-[#12162a]/40 p-3 rounded-xl border border-slate-800/80">
+            <div className="mb-2">
               <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">บันทึกเลขมิเตอร์เริ่มต้น</p>
             </div>
             <div>
@@ -144,16 +143,6 @@ export default function CheckInModal({ room, onClose, onSuccess }: CheckInModalP
                 required
                 value={checkInLight}
                 onChange={(e) => setCheckInLight(e.target.value)}
-                className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-lg py-2 px-2.5 text-xs text-white focus:outline-none transition"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">เลขมิเตอร์น้ำเริ่มต้น</label>
-              <input 
-                type="number"
-                required
-                value={checkInWater}
-                onChange={(e) => setCheckInWater(e.target.value)}
                 className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-lg py-2 px-2.5 text-xs text-white focus:outline-none transition"
               />
             </div>

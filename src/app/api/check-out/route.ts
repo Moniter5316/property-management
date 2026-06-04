@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const { roomId, endDate, finalLightMeter, finalWaterMeter, damageFee, isForfeitDeposit } = body;
 
     // Validation
-    if (!roomId || !endDate || finalLightMeter === undefined || finalWaterMeter === undefined) {
+    if (!roomId || !endDate || finalLightMeter === undefined) {
       return NextResponse.json(
         { error: 'Missing required check-out fields' },
         { status: 400 }
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       end,
       {
         lightMeter: Number(finalLightMeter),
-        waterMeter: Number(finalWaterMeter),
+        waterMeter: finalWaterMeter !== undefined ? Number(finalWaterMeter) : 0,
       },
       damageFee ? Number(damageFee) : 0,
       !!isForfeitDeposit

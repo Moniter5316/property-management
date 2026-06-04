@@ -18,21 +18,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Determine if it's PAID or PARTIAL
-    // We should ideally fetch the bill and check the totalAmount vs matchedAmount
-    // but the client will tell us the intended status or we can deduce it
-    const billStatus = body.billStatus || 'PAID'; // "PAID" or "PARTIAL"
-
     const result = await matchPaymentTransaction(
       paymentTransactionId,
-      billId,
-      Number(matchedAmount),
-      billStatus
+      billId
     );
 
     return NextResponse.json({
       success: true,
-      message: `จับคู่สลิปสำเร็จ (สถานะ: ${billStatus})`,
+      message: `จับคู่สลิปสำเร็จ (สถานะ: ${result.bill?.status || 'UNKNOWN'})`,
       data: result
     });
   } catch (error: any) {

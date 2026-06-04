@@ -15,7 +15,6 @@ export default function BillMetersModal({ room, activeBill, selectedMonth, selec
   const [error, setError] = useState<string | null>(null);
   
   const [meterLight, setMeterLight] = useState('');
-  const [meterWater, setMeterWater] = useState('');
   const [meterCommon, setMeterCommon] = useState('100');
   const [meterDeposit, setMeterDeposit] = useState('');
   const [meterDiscount, setMeterDiscount] = useState('');
@@ -50,7 +49,7 @@ export default function BillMetersModal({ room, activeBill, selectedMonth, selec
           currentLightMeter: Number(meterLight),
           lightPricePerUnit: room.property?.lightPricePerUnit || 9,
           previousWaterMeter: activeBill.previousWaterMeter,
-          currentWaterMeter: Number(meterWater),
+          currentWaterMeter: activeBill.previousWaterMeter, // ผ่านเลขเดิมไปเลยเพื่อไม่ให้เกิด Error ใน API
           waterPricePerUnit: room.property?.waterPricePerUnit || 100,
           commonFeeCharged: Number(meterCommon),
           depositCharged: Number(meterDeposit),
@@ -96,34 +95,18 @@ export default function BillMetersModal({ room, activeBill, selectedMonth, selec
           )}
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-yellow-400 mb-1.5 flex items-center gap-1">
-                  <Zap className="h-3.5 w-3.5" /> เลขไฟใหม่ (เดิม: {prevLight})
-                </label>
-                <input 
-                  type="number"
-                  required
-                  placeholder="ป้อนเลขไฟล่าสุด"
-                  value={meterLight}
-                  onChange={(e) => setMeterLight(e.target.value)}
-                  className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-white transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-blue-400 mb-1.5 flex items-center gap-1">
-                  <Droplet className="h-3.5 w-3.5" /> เลขน้ำใหม่ (เดิม: {prevWater})
-                </label>
-                <input 
-                  type="number"
-                  required
-                  placeholder="ป้อนเลขน้ำล่าสุด"
-                  value={meterWater}
-                  onChange={(e) => setMeterWater(e.target.value)}
-                  className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-white transition"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-yellow-400 mb-1.5 flex items-center gap-1">
+                <Zap className="h-3.5 w-3.5" /> เลขไฟใหม่ (เดิม: {prevLight})
+              </label>
+              <input 
+                type="number"
+                required
+                placeholder="ป้อนเลขไฟล่าสุด"
+                value={meterLight}
+                onChange={(e) => setMeterLight(e.target.value)}
+                className="w-full bg-[#12162a]/80 border border-slate-800 focus:border-indigo-500/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-white transition"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800">

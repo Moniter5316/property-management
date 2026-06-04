@@ -227,9 +227,35 @@ export async function saveBill(data: {
   // Configurations calculations
   const commonFeeCharged = data.commonFeeCharged !== undefined ? Number(data.commonFeeCharged) : (room.property?.commonFee ?? 100);
   const depositCharged = data.depositCharged !== undefined ? Number(data.depositCharged) : 0;
-  const discount = data.discount !== undefined ? Number(data.discount) : 0;
-  const otherCharged = data.otherCharged !== undefined ? Number(data.otherCharged) : 0;
+  let discount = data.discount !== undefined ? Number(data.discount) : 0;
+  let otherCharged = data.otherCharged !== undefined ? Number(data.otherCharged) : 0;
   const remark = data.remark !== undefined ? data.remark : null;
+
+  // Find if this is a new bill
+  let existingBill: any = null;
+  if (await isUsingMock()) {
+    existingBill = mockDb.getMockBills(1, 2099, undefined).find(b => b.roomId === data.roomId && b.month === data.month && b.year === data.year);
+  } else {
+    existingBill = await prisma.bill.findFirst({
+      where: { roomId: data.roomId, month: data.month, year: data.year },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  // BUSINESS LOGIC OVERHAUL: Auto carry-over Overpayments / Arrears
+  if (!existingBill && room.bills && room.bills.length > 0) {
+    // If we are generating a brand new bill, look at past bills for arrears/overpayments
+    const pastBills = room.bills.filter(b => b.id !== existingBill?.id && (['UNPAID', 'PARTIAL', 'PENDING'].includes(b.status) || b.paidAmount > b.totalAmount));
+    const netBalance = pastBills.reduce((sum, b) => sum + (b.totalAmount - b.paidAmount), 0);
+    
+    if (netBalance < 0) {
+      // Negative balance means they overpaid (Credit). Apply it as an automatic discount.
+      discount += Math.abs(netBalance);
+    } else if (netBalance > 0) {
+      // Positive balance means they underpaid (Arrears). Auto-add to otherCharged.
+      otherCharged += netBalance;
+    }
+  }
 
   const totalAmount = Math.max(0, Math.round((proratedRentCharged + totalLightPrice + totalWaterPrice + commonFeeCharged + depositCharged + otherCharged - discount) * 100) / 100);
 
@@ -247,33 +273,33 @@ export async function saveBill(data: {
     baseRentCharged: room.baseRent,
     proratedRentCharged,
     commonFeeCharged,
-    depositCharged,
+    depositCharged: data.depositCharged !== undefined ? data.depositCharged : (existingBill?.depositCharged || 0),
     discount,
     otherCharged,
     occupantCount,
-    remark,
+    remark: data.remark !== undefined ? data.remark : (existingBill?.remark || null),
     totalAmount,
-    status: data.status || 'UNPAID',
-    paidAmount: 0, // Default to 0 when first creating or updating bill unless matched
-    paymentSlipUrl: data.paymentSlipUrl || null,
+    status: data.status || existingBill?.status || 'UNPAID',
+    paidAmount: existingBill?.paidAmount || 0, // BUSINESS LOGIC OVERHAUL: Preserve paidAmount
+    paymentSlipUrl: data.paymentSlipUrl !== undefined ? data.paymentSlipUrl : (existingBill?.paymentSlipUrl || null),
     roomId: data.roomId,
+    tenantId: activeTenant?.id || existingBill?.tenantId || null,
   };
 
   if (await isUsingMock()) {
     return mockDb.createMockBill(billPayload);
   }
 
-  return prisma.bill.upsert({
-    where: {
-      roomId_month_year: {
-        roomId: data.roomId,
-        month: data.month,
-        year: data.year,
-      },
-    },
-    update: billPayload,
-    create: billPayload,
-  });
+  if (existingBill) {
+    return prisma.bill.update({
+      where: { id: existingBill.id },
+      data: billPayload,
+    });
+  } else {
+    return prisma.bill.create({
+      data: billPayload,
+    });
+  }
 }
 
 // 7. Check-in tenant
@@ -318,6 +344,7 @@ export async function checkInTenant(
       waterPricePerUnit: waterRate,
       occupantCount: occCount,
       depositCharged: tenantData.depositAmount || 0, // Log the initial deposit on the first bill
+      commonFeeCharged: mockRoom?.property?.commonFee ?? 100, // BUSINESS LOGIC OVERHAUL: Missing Common Fee
       status: 'PENDING',
     });
 
@@ -358,48 +385,47 @@ export async function checkInTenant(
 
     // Prorated check-in rent
     const prorateInfo = calculateProratedRent(baseRent, tenantData.startDate, null, checkInMonth, checkInYear);
+    const commonFeeCharged = room?.property?.commonFee ?? 100; // BUSINESS LOGIC OVERHAUL: Missing Common Fee
 
-    await tx.bill.upsert({
-      where: {
-        roomId_month_year: {
+    const checkInBillPayload = {
+      previousLightMeter: initialMeters.lightMeter,
+      currentLightMeter: initialMeters.lightMeter,
+      previousWaterMeter: initialMeters.waterMeter,
+      currentWaterMeter: initialMeters.waterMeter,
+      lightPricePerUnit: lightRate,
+      waterPricePerUnit: waterRate,
+      totalLightPrice: 0,
+      totalWaterPrice: 0,
+      baseRentCharged: baseRent,
+      proratedRentCharged: prorateInfo.rentCharged,
+      commonFeeCharged,
+      depositCharged: tenantData.depositAmount || 0,
+      occupantCount: occCount,
+      totalAmount: prorateInfo.rentCharged + (tenantData.depositAmount || 0) + commonFeeCharged,
+      status: 'PENDING',
+      tenantId: tenant.id,
+      paidAmount: 0,
+    };
+
+    const existingCheckInBill = await tx.bill.findFirst({
+      where: { roomId, month: checkInMonth, year: checkInYear, tenantId: tenant.id }
+    });
+
+    if (existingCheckInBill) {
+      await tx.bill.update({
+        where: { id: existingCheckInBill.id },
+        data: checkInBillPayload,
+      });
+    } else {
+      await tx.bill.create({
+        data: {
+          ...checkInBillPayload,
           roomId,
           month: checkInMonth,
           year: checkInYear,
         },
-      },
-      update: {
-        previousLightMeter: initialMeters.lightMeter,
-        currentLightMeter: initialMeters.lightMeter,
-        previousWaterMeter: initialMeters.waterMeter,
-        currentWaterMeter: initialMeters.waterMeter,
-        lightPricePerUnit: lightRate,
-        waterPricePerUnit: waterRate,
-        proratedRentCharged: prorateInfo.rentCharged,
-        baseRentCharged: baseRent,
-        depositCharged: tenantData.depositAmount || 0,
-        occupantCount: occCount,
-        totalAmount: prorateInfo.rentCharged + (tenantData.depositAmount || 0),
-      },
-      create: {
-        roomId,
-        month: checkInMonth,
-        year: checkInYear,
-        previousLightMeter: initialMeters.lightMeter,
-        currentLightMeter: initialMeters.lightMeter,
-        lightPricePerUnit: lightRate,
-        totalLightPrice: 0,
-        previousWaterMeter: initialMeters.waterMeter,
-        currentWaterMeter: initialMeters.waterMeter,
-        waterPricePerUnit: waterRate,
-        totalWaterPrice: 0,
-        baseRentCharged: baseRent,
-        proratedRentCharged: prorateInfo.rentCharged,
-        depositCharged: tenantData.depositAmount || 0,
-        occupantCount: occCount,
-        totalAmount: prorateInfo.rentCharged + (tenantData.depositAmount || 0),
-        status: 'PENDING',
-      },
-    });
+      });
+    }
 
     return { tenant, roomStatus: 'OCCUPIED' };
   });
@@ -462,11 +488,21 @@ export async function checkOutTenant(
   const unpaidBills = room.bills?.filter(b => ['UNPAID', 'PARTIAL', 'PENDING'].includes(b.status) && b.id !== currentMonthBill?.id) || [];
   const pastUnpaidBalance = unpaidBills.reduce((sum, b) => sum + (b.totalAmount - b.paidAmount), 0);
 
-  // Forfeit Deposit Logic
-  const depositAmount = isForfeitDeposit ? 0 : ((activeTenant as any).depositAmount || 0);
+  // BUSINESS LOGIC OVERHAUL: Refunding Unpaid Deposits
+  // Check if the deposit was actually paid in the first bill
+  const checkInMonth = activeTenant.startDate.getMonth() + 1;
+  const checkInYear = activeTenant.startDate.getFullYear();
+  const firstBill = room.bills?.find(b => b.month === checkInMonth && b.year === checkInYear);
+  const isDepositPaid = firstBill ? !['UNPAID', 'PENDING'].includes(firstBill.status) : true;
+
+  // Forfeit Deposit Logic + Unpaid Deposit Logic
+  const depositAmount = (isForfeitDeposit || !isDepositPaid) ? 0 : ((activeTenant as any).depositAmount || 0);
+
+  // BUSINESS LOGIC OVERHAUL: Missing Common Fee
+  const commonFeeCharged = (room as any).property?.commonFee ?? 100;
 
   // Final bill calculation with deposit and damage fee
-  const rawTotal = prorateInfo.rentCharged + totalLightPrice + totalWaterPrice + damageFee + pastUnpaidBalance;
+  const rawTotal = prorateInfo.rentCharged + totalLightPrice + totalWaterPrice + damageFee + pastUnpaidBalance + commonFeeCharged;
   const totalAmount = Math.round((rawTotal - depositAmount) * 100) / 100;
 
   // Refund Pending State
@@ -498,7 +534,7 @@ export async function checkOutTenant(
       totalWaterPrice,
       baseRentCharged: room.baseRent,
       proratedRentCharged: prorateInfo.rentCharged,
-      commonFeeCharged: 0,
+      commonFeeCharged, // BUSINESS LOGIC OVERHAUL: Missing Common Fee
       depositCharged: 0,
       discount: depositAmount, // Treat returned deposit as a discount on the final bill
       otherCharged: damageFee + pastUnpaidBalance, // Treat damage fee + arrears as otherCharged
@@ -508,6 +544,7 @@ export async function checkOutTenant(
       status: finalStatus as any,
       paidAmount: 0,
       paymentSlipUrl: null,
+      tenantId: activeTenant.id,
     });
 
     return { finalBill, roomStatus: 'CLEARANCE' };
@@ -536,55 +573,48 @@ export async function checkOutTenant(
     }
 
     // 4. Save final bill
-    const finalBill = await tx.bill.upsert({
-      where: {
-        roomId_month_year: {
+    const existingFinalBill = await tx.bill.findFirst({
+      where: { roomId, month: checkOutMonth, year: checkOutYear, tenantId: activeTenant.id }
+    });
+
+    const finalBillPayload = {
+      previousLightMeter,
+      currentLightMeter: finalMeters.lightMeter,
+      lightPricePerUnit: lightRate,
+      totalLightPrice,
+      previousWaterMeter,
+      currentWaterMeter: finalMeters.waterMeter,
+      waterPricePerUnit: waterRate,
+      totalWaterPrice,
+      baseRentCharged: room.baseRent,
+      proratedRentCharged: prorateInfo.rentCharged,
+      commonFeeCharged, // BUSINESS LOGIC OVERHAUL: Missing Common Fee
+      otherCharged: damageFee + pastUnpaidBalance,
+      discount: depositAmount,
+      occupantCount: room.occupantCount || 1,
+      totalAmount,
+      status: finalStatus,
+      remark: 'Final Bill (Check-out)',
+      tenantId: activeTenant.id,
+    };
+
+    let finalBill;
+    if (existingFinalBill) {
+      finalBill = await tx.bill.update({
+        where: { id: existingFinalBill.id },
+        data: finalBillPayload,
+      });
+    } else {
+      finalBill = await tx.bill.create({
+        data: {
+          ...finalBillPayload,
           roomId,
           month: checkOutMonth,
           year: checkOutYear,
+          paidAmount: 0,
         },
-      },
-      update: {
-        previousLightMeter,
-        currentLightMeter: finalMeters.lightMeter,
-        lightPricePerUnit: lightRate,
-        totalLightPrice,
-        previousWaterMeter,
-        currentWaterMeter: finalMeters.waterMeter,
-        waterPricePerUnit: waterRate,
-        totalWaterPrice,
-        baseRentCharged: room.baseRent,
-        proratedRentCharged: prorateInfo.rentCharged,
-        otherCharged: damageFee + pastUnpaidBalance,
-        discount: depositAmount,
-        occupantCount: room.occupantCount || 1,
-        totalAmount,
-        status: finalStatus,
-        remark: 'Final Bill (Check-out)',
-      },
-      create: {
-        roomId,
-        month: checkOutMonth,
-        year: checkOutYear,
-        previousLightMeter,
-        currentLightMeter: finalMeters.lightMeter,
-        lightPricePerUnit: lightRate,
-        totalLightPrice,
-        previousWaterMeter,
-        currentWaterMeter: finalMeters.waterMeter,
-        waterPricePerUnit: waterRate,
-        totalWaterPrice,
-        baseRentCharged: room.baseRent,
-        proratedRentCharged: prorateInfo.rentCharged,
-        otherCharged: damageFee + pastUnpaidBalance,
-        discount: depositAmount,
-        occupantCount: room.occupantCount || 1,
-        totalAmount,
-        status: finalStatus,
-        paidAmount: 0,
-        remark: 'Final Bill (Check-out)',
-      },
-    });
+      });
+    }
 
     return { finalBill, roomStatus: 'CLEARANCE' };
   });
@@ -757,28 +787,49 @@ export async function createPaymentTransaction(data: {
 }
 
 // 17. Match Payment Transaction to a Bill
-export async function matchPaymentTransaction(ptId: string, billId: string, paidAmount: number, billStatus: 'PAID' | 'PARTIAL') {
+export async function matchPaymentTransaction(ptId: string, billId: string) {
   if (await isUsingMock()) {
+    // BUSINESS LOGIC OVERHAUL: Pull actual pt amount.
+    const originalPt = mockDb.getMockPaymentTransactions().find(p => p.id === ptId);
+    if (!originalPt) throw new Error('Payment transaction not found');
+    const actualSlipAmount = originalPt.amount;
+
     const pt = mockDb.updateMockPaymentTransaction(ptId, { status: 'MATCHED', billId });
-    // In mock DB, we should also increment, but mockDb.updateMockBill might just merge object.
-    // Let's get the current bill first.
-    const currentBill = mockDb.getMockBills(1, 2099, undefined).find(b => b.id === billId) || mockDb.getMockRoomById(pt?.billId || '')?.bills?.find((b: any) => b.id === billId);
+    // Search all rooms to find the bill since getMockBills filters by specific month/year
+    const allRooms = mockDb.getMockRooms();
+    const currentBill = allRooms.flatMap((r: any) => r.bills || []).find((b: any) => b.id === billId);
+    if (!currentBill) throw new Error('Bill not found');
     
-    // Fallback if we cannot cleanly increment mock
-    const newPaidAmount = (currentBill?.paidAmount || 0) + paidAmount;
+    const newPaidAmount = (currentBill.paidAmount || 0) + actualSlipAmount;
+    // Server-Side Bill Status Validation
+    const billStatus = newPaidAmount >= currentBill.totalAmount ? 'PAID' : 'PARTIAL';
+
     const bill = mockDb.updateMockBill(billId, { status: billStatus, paidAmount: newPaidAmount });
     return { pt, bill };
   }
   return prisma.$transaction(async (tx) => {
+    // BUSINESS LOGIC OVERHAUL: Fetch real pt amount to prevent forgery
+    const originalPt = await tx.paymentTransaction.findUnique({ where: { id: ptId } });
+    if (!originalPt) throw new Error('Payment transaction not found');
+    const actualSlipAmount = originalPt.amount;
+
+    const originalBill = await tx.bill.findUnique({ where: { id: billId } });
+    if (!originalBill) throw new Error('Bill not found');
+
     const pt = await tx.paymentTransaction.update({
       where: { id: ptId },
       data: { status: 'MATCHED', billId }
     });
+
+    // Server-Side Bill Status Validation
+    const expectedNewPaidAmount = originalBill.paidAmount + actualSlipAmount;
+    const billStatus = expectedNewPaidAmount >= originalBill.totalAmount ? 'PAID' : 'PARTIAL';
+
     const bill = await tx.bill.update({
       where: { id: billId },
       data: { 
         status: billStatus, 
-        paidAmount: { increment: paidAmount } 
+        paidAmount: { increment: actualSlipAmount } 
       }
     });
     return { pt, bill };

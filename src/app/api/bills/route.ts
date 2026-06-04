@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import { getBills, saveBill } from '@/lib/dbService';
 import { verifyAdmin } from '@/lib/auth';
 import { z } from 'zod';

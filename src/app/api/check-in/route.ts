@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const { roomId, tenantName, tenantPhone, startDate, initialLightMeter, initialWaterMeter, occupantCount, depositAmount } = body;
 
     // Validation
-    if (!roomId || !tenantName || !tenantPhone || !startDate || initialLightMeter === undefined || initialWaterMeter === undefined) {
+    if (!roomId || !tenantName || !tenantPhone || !startDate || initialLightMeter === undefined) {
       return NextResponse.json(
         { error: 'Missing required check-in fields' },
         { status: 400 }
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       },
       {
         lightMeter: Number(initialLightMeter),
-        waterMeter: Number(initialWaterMeter),
+        waterMeter: initialWaterMeter !== undefined ? Number(initialWaterMeter) : 0,
       },
       occupantCount !== undefined ? Number(occupantCount) : undefined
     );

@@ -5,10 +5,8 @@ import { createPaymentTransaction } from '@/lib/dbService';
 // Since this is for LINE OA webhook, SlipOK sends a POST request here
 export async function POST(request: Request) {
   try {
-    // Minimal Security: Check if a token is provided in the query string
-    // e.g. /api/webhooks/slipok?token=MY_SECRET_TOKEN
-    const url = new URL(request.url);
-    const token = url.searchParams.get('token');
+    // Minimal Security: Check if a token is provided in the headers (x-slipok-signature or authorization)
+    const token = request.headers.get('x-slipok-signature') || request.headers.get('authorization');
 
     // SECURITY OVERHAUL: Strict Webhook Token Verification
     const secret = process.env.SLIPOK_WEBHOOK_SECRET;
@@ -63,7 +61,7 @@ export async function POST(request: Request) {
       transDate,
       transTime,
       status: 'UNMATCHED',
-      slipImageUrl: null // We might get a URL from SlipOK or we can leave it null if it's text-based
+      slipImageUrl: payloadData.url || null // SECURITY OVERHAUL: Save cloud URL if available, but never save raw Base64 data to prevent DB bloat
     });
 
     return NextResponse.json({ success: true, message: 'Webhook received and saved as UNMATCHED' });

@@ -50,6 +50,7 @@ model Tenant {
   room          Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  bills         Bill[]
 }
 
 model Bill {
@@ -78,11 +79,13 @@ model Bill {
   paymentSlipUrl      String?
   roomId              String
   room                Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tenantId            String?
+  tenant              Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   paymentTransactions PaymentTransaction[]
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  @@unique([roomId, month, year])
+  @@unique([roomId, month, year, tenantId])
 }
 
 model PaymentTransaction {
@@ -94,9 +97,11 @@ model PaymentTransaction {
   transDate      String?  // Date from slip
   transTime      String?  // Time from slip
   status         String   // "UNMATCHED" | "MATCHED"
-  slipImageUrl   String?
+  slipImageUrl   String?  // Cloud storage URL (Do not store Base64 to prevent DB bloat)
   billId         String?
   bill           Bill?    @relation(fields: [billId], references: [id])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@unique([transRef])
 }
