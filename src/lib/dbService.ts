@@ -515,7 +515,7 @@ export async function checkOutTenant(
     mockDb.updateMockRoom(roomId, { status: 'CLEARANCE' });
     
     // Clear old unpaid bills
-    unpaidBills.forEach(b => {
+    unpaidBills.forEach((b: any) => {
       mockDb.updateMockBill(b.id, { status: 'CLEARED' as any });
     });
 
