@@ -1,40 +1,15 @@
 import { prisma } from './prisma';
 import * as mockDb from './mockData';
 
-// Helper to determine whether to use live database (Prisma) or mock database (in-memory)
-// Use a cooldown-based cache so serverless lambdas can attempt reconnection periodically
-const PROBE_COOLDOWN_MS = 30_000; // 30 seconds
-let usePrismaStatus: boolean | null = null;
-let lastProbeTime: number | null = null;
-
 export async function isUsingMock(): Promise<boolean> {
-  const now = Date.now();
-  // Return cached result if cooldown hasn't elapsed (prevents locking and DB overload)
-  if (usePrismaStatus !== null && lastProbeTime !== null && (now - lastProbeTime) < PROBE_COOLDOWN_MS) {
-    return !usePrismaStatus;
-  }
-
   const dbUrl = process.env.DATABASE_URL;
+  // Strictly use Mock if there's no DB URL or it's the default dummy one
   if (!dbUrl || dbUrl.includes('johndoe:randompassword')) {
-    usePrismaStatus = false;
-    lastProbeTime = now;
     return true;
   }
-
-  try {
-    // Attempt a fast query with a 2.5-second timeout
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2500));
-    const query = prisma.$queryRaw`SELECT 1`;
-    await Promise.race([query, timeout]);
-    usePrismaStatus = true;
-    lastProbeTime = now;
-    return false;
-  } catch (err) {
-    console.warn('⚠️ Prisma database connection failed. Falling back to local mock data.', err);
-    usePrismaStatus = false;
-    lastProbeTime = now;
-    return true;
-  }
+  // If we have a real DATABASE_URL, NEVER fallback to mock data, even if it's slow to connect.
+  // This prevents catastrophic data loss and confusion on Production (e.g. Neon DB cold starts).
+  return false;
 }
 
 // 1. Get properties
