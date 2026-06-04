@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import { verifyAdmin } from '@/lib/auth';
 
 export async function GET() {
