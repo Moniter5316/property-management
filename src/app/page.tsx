@@ -1003,6 +1003,7 @@ export default function Dashboard() {
       setLoginUsername('');
       setLoginPassword('');
       setModalType(null);
+      fetchData(true);
     } catch (err: any) {
       setPortalError(err.message);
       setModalError(err.message);
