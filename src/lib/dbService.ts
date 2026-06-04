@@ -352,7 +352,7 @@ export async function checkInTenant(
   }
 
   // Live Database Transaction
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     // 1. Update room
     await tx.room.update({
       where: { id: roomId },
@@ -551,7 +551,7 @@ export async function checkOutTenant(
   }
 
   // Live Database Transaction
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     // 1. Terminate tenant
     await tx.tenant.update({
       where: { id: activeTenant.id },
@@ -675,7 +675,7 @@ export async function resetDb(toEmpty: boolean) {
     return { success: true, isMock: true };
   }
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     await tx.bill.deleteMany();
     await tx.tenant.deleteMany();
     await tx.room.deleteMany();
@@ -807,7 +807,7 @@ export async function matchPaymentTransaction(ptId: string, billId: string) {
     const bill = mockDb.updateMockBill(billId, { status: billStatus, paidAmount: newPaidAmount });
     return { pt, bill };
   }
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     // BUSINESS LOGIC OVERHAUL: Fetch real pt amount to prevent forgery
     const originalPt = await tx.paymentTransaction.findUnique({ where: { id: ptId } });
     if (!originalPt) throw new Error('Payment transaction not found');
