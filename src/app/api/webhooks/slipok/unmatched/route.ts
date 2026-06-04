@@ -10,7 +10,7 @@ export async function GET() {
 
     const transactions = await getPaymentTransactions();
     // Filter out MATCHED if we only want UNMATCHED
-    const unmatched = transactions.filter(t => t.status === 'UNMATCHED');
+    const unmatched = transactions.filter((t: any) => t.status === 'UNMATCHED');
 
     return NextResponse.json(unmatched);
   } catch (error: any) {
