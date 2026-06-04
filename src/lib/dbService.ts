@@ -245,8 +245,8 @@ export async function saveBill(data: {
   // BUSINESS LOGIC OVERHAUL: Auto carry-over Overpayments / Arrears
   if (!existingBill && room.bills && room.bills.length > 0) {
     // If we are generating a brand new bill, look at past bills for arrears/overpayments
-    const pastBills = room.bills.filter(b => b.id !== existingBill?.id && (['UNPAID', 'PARTIAL', 'PENDING'].includes(b.status) || b.paidAmount > b.totalAmount));
-    const netBalance = pastBills.reduce((sum, b) => sum + (b.totalAmount - b.paidAmount), 0);
+    const pastBills = room.bills.filter((b: any) => b.id !== existingBill?.id && (['UNPAID', 'PARTIAL', 'PENDING'].includes(b.status) || b.paidAmount > b.totalAmount));
+    const netBalance = pastBills.reduce((sum: number, b: any) => sum + (b.totalAmount - b.paidAmount), 0);
     
     if (netBalance < 0) {
       // Negative balance means they overpaid (Credit). Apply it as an automatic discount.
