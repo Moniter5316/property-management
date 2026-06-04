@@ -234,7 +234,7 @@ export async function saveBill(data: {
   // Find if this is a new bill
   let existingBill: any = null;
   if (await isUsingMock()) {
-    existingBill = mockDb.getMockBills(1, 2099, undefined).find(b => b.roomId === data.roomId && b.month === data.month && b.year === data.year);
+    existingBill = mockDb.getMockBills(1, 2099, undefined).find((b: any) => b.roomId === data.roomId && b.month === data.month && b.year === data.year);
   } else {
     existingBill = await prisma.bill.findFirst({
       where: { roomId: data.roomId, month: data.month, year: data.year },
@@ -453,7 +453,7 @@ export async function checkOutTenant(
   let previousWaterMeter = finalMeters.waterMeter;
 
   // Try to find the bill of checkout month or the latest bill
-  const currentMonthBill = room.bills?.find(b => b.month === checkOutMonth && b.year === checkOutYear);
+  const currentMonthBill = room.bills?.find((b: any) => b.month === checkOutMonth && b.year === checkOutYear);
   if (currentMonthBill) {
     previousLightMeter = currentMonthBill.previousLightMeter;
     previousWaterMeter = currentMonthBill.previousWaterMeter;
@@ -485,14 +485,14 @@ export async function checkOutTenant(
   const totalWaterPrice = Math.round(occupantCount * waterRate * 100) / 100;
 
   // Unpaid Arrears Integration
-  const unpaidBills = room.bills?.filter(b => ['UNPAID', 'PARTIAL', 'PENDING'].includes(b.status) && b.id !== currentMonthBill?.id) || [];
-  const pastUnpaidBalance = unpaidBills.reduce((sum, b) => sum + (b.totalAmount - b.paidAmount), 0);
+  const unpaidBills = room.bills?.filter((b: any) => ['UNPAID', 'PARTIAL', 'PENDING'].includes(b.status) && b.id !== currentMonthBill?.id) || [];
+  const pastUnpaidBalance = unpaidBills.reduce((sum: number, b: any) => sum + (b.totalAmount - b.paidAmount), 0);
 
   // BUSINESS LOGIC OVERHAUL: Refunding Unpaid Deposits
   // Check if the deposit was actually paid in the first bill
   const checkInMonth = activeTenant.startDate.getMonth() + 1;
   const checkInYear = activeTenant.startDate.getFullYear();
-  const firstBill = room.bills?.find(b => b.month === checkInMonth && b.year === checkInYear);
+  const firstBill = room.bills?.find((b: any) => b.month === checkInMonth && b.year === checkInYear);
   const isDepositPaid = firstBill ? !['UNPAID', 'PENDING'].includes(firstBill.status) : true;
 
   // Forfeit Deposit Logic + Unpaid Deposit Logic
@@ -567,7 +567,7 @@ export async function checkOutTenant(
     // 3. Clear old unpaid bills
     if (unpaidBills.length > 0) {
       await tx.bill.updateMany({
-        where: { id: { in: unpaidBills.map(b => b.id) } },
+        where: { id: { in: unpaidBills.map((b: any) => b.id) } },
         data: { status: 'CLEARED' },
       });
     }
@@ -759,7 +759,7 @@ export async function updateProperty(id: string, data: {
 // 15. Get unmatched Payment Transactions
 export async function getPaymentTransactions() {
   if (await isUsingMock()) {
-    return mockDb.getMockPaymentTransactions().sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return mockDb.getMockPaymentTransactions().sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
   }
   return prisma.paymentTransaction.findMany({
     orderBy: { createdAt: 'desc' },
@@ -790,7 +790,7 @@ export async function createPaymentTransaction(data: {
 export async function matchPaymentTransaction(ptId: string, billId: string) {
   if (await isUsingMock()) {
     // BUSINESS LOGIC OVERHAUL: Pull actual pt amount.
-    const originalPt = mockDb.getMockPaymentTransactions().find(p => p.id === ptId);
+    const originalPt = mockDb.getMockPaymentTransactions().find((p: any) => p.id === ptId);
     if (!originalPt) throw new Error('Payment transaction not found');
     const actualSlipAmount = originalPt.amount;
 
