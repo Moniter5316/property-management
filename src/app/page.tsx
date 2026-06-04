@@ -2735,10 +2735,7 @@ export default function Dashboard() {
               </div>
 
               {/* Default Credentials Helper */}
-              <div className="p-2.5 rounded-lg bg-indigo-950/20 border border-indigo-500/10 text-[10px] text-indigo-400 leading-relaxed">
-                💡 <strong>บัญชีทดสอบเริ่มต้น:</strong><br />
-                ชื่อผู้ใช้งาน: <code className="bg-indigo-950/50 px-1 py-0.5 rounded font-mono select-all">admin</code> | รหัสผ่าน: <code className="bg-indigo-950/50 px-1 py-0.5 rounded font-mono select-all">password</code>
-              </div>
+              
 
               <div className="flex gap-2 pt-2">
                 <button 
