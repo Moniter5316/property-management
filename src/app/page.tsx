@@ -87,6 +87,11 @@ interface Bill {
   createdAt: string | Date;
 }
 
+const MONTHS = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+];
+
 // Helper to convert number to Thai Baht text
 function bahtText(num: number): string {
   if (num === 0) return 'ศูนย์บาทถ้วน';
@@ -185,7 +190,7 @@ function getThaiBillDateString(month: number, year: number) {
     "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
   ];
 
-  const monthName = thaiMonths[month - 1];
+  const monthName = MONTHS[month - 1];
   const monthNameShort = thaiMonthsShort[month - 1];
   
   return {
